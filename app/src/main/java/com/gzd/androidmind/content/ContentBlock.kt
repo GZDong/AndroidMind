@@ -11,6 +11,8 @@ sealed interface ContentBlock {
         val links: Map<String, String> = emptyMap(),
     ) : ContentBlock
     data class Code(val text: String) : ContentBlock
+    /** Vertical steps rendered as a flowchart, with text that stays readable on phones. */
+    data class FlowDiagram(val steps: List<String>) : ContentBlock
     data class Link(val text: String, val targetId: String) : ContentBlock
     data class LinkButton(val text: String, val targetId: String) : ContentBlock
 }

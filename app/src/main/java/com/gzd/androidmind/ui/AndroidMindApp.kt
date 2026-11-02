@@ -302,6 +302,30 @@ private fun ArticleBlock(block: ContentBlock, navigate: (String) -> Unit) {
                 )
             }
         }
+        is ContentBlock.FlowDiagram -> Column(modifier = Modifier.fillMaxWidth()) {
+            block.steps.forEachIndexed { index, step ->
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        step,
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        lineHeight = 28.sp,
+                    )
+                }
+                if (index < block.steps.lastIndex) {
+                    Text(
+                        "↓",
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
+            }
+        }
         is ContentBlock.Link -> Text(
             block.text,
             modifier = Modifier.fillMaxWidth().clickable(

@@ -4,7 +4,6 @@ import com.gzd.androidmind.content.BookPage
 import com.gzd.androidmind.content.ContentBlock
 import com.gzd.androidmind.content.ContentBlock.Code
 import com.gzd.androidmind.content.ContentBlock.Heading
-import com.gzd.androidmind.content.ContentBlock.LinkButton
 import com.gzd.androidmind.content.ContentBlock.Paragraph
 
 /**
@@ -17,33 +16,29 @@ object PhotoCheatingDetectionPage : BookPage.Article() {
     override val id = ID
     override val title = "作弊检测方式"
     override val blocks: List<ContentBlock> = listOf(
-        Paragraph("四类规则之间是“或”的关系，满足任意一类即可确认；每一类内部要求的组合证据是“且”的关系。确认环境与是否拦截是两步，实际拍照拦截还受总开关、工程师白名单控制。"),
+        Paragraph("四类之间是“或”，满足任意一类即可确认；每类内部的组合条件是“且”。实际拍照拦截还需总开关开启，且工程师不在白名单中。"),
         Heading("第一类：PendingIntent 创建者身份异常（id）"),
-        Paragraph("云派工自己创建一个全新的 PendingIntent，再读取 creatorPackage。如果创建者包名不是云派工的固定包名，则发现了身份矛盾。检查的不是通知或其他应用传入的 PendingIntent，避免把别人的创建者身份当成自己的。"),
+        Paragraph("云派工自己创建全新的 PendingIntent，读取 creatorPackage，与云派工固定包名比较。查自己的令牌，不查通知或其他应用传来的令牌，避免认错创建者。"),
         Code(
             """
-            正常运行：
-            云派工申请创建 PendingIntent
-            → 系统登记创建者 com.gree.app.dispatch
-            → 与云派工固定包名相同
+            正常：云派工申请创建令牌
+            → 创建者 com.gree.app.dispatch，一致
 
-            部分多开环境：
-            容器内的云派工申请创建 PendingIntent
-            → 容器拦截请求，以宿主身份向系统申请
-            → 系统登记创建者 com.paint.yssh
-            → 与云派工固定包名不同，命中 id
+            部分多开：请求被改为宿主身份
+            → 创建者 com.paint.yssh，不一致
+            → 命中 id
             """.trimIndent(),
         ),
-        Paragraph("原理：目标应用的代码实际寄生在宿主进程中，部分容器会改写请求，以宿主身份向系统申请令牌。它可能伪装了 getPackageName()，却没有处理令牌创建者的返回值，因此暴露宿主。Intent 指向哪个应用，不等于谁创建了 PendingIntent；该接口也不是系统提供的“多开检测开关”。"),
-        Paragraph("每次探测使用独立 action，创建后取消令牌，不发送广播，不复用或取消业务令牌。如果对方也伪装了创建者返回值，这一类可能检测不到，需要其他规则补充。"),
+        Paragraph("原理：部分容器借宿主身份向系统申请令牌，虽然伪装了应用包名，却漏掉了创建者返回值，因此暴露宿主。Intent 指向谁不等于谁创建了令牌；这不是系统直接识别了多开。"),
+        Paragraph("探针使用独立 action，完成后取消，不发送广播、不影响业务令牌。如果对方连创建者返回值也伪装，这一类可能漏检。"),
         Heading("第二类：宿主虚拟路径＋沙盒引擎库（g+sl）"),
         Paragraph("同时发现：当前云派工位于其他应用的虚拟目录；本进程加载了完整库名 libsandbox_32.so 或 libsandbox_64.so。"),
-        Paragraph("原理：虚拟目录表明云派工的数据或代码落在宿主容器内，引擎库提供容器正在本进程工作的佐证。两项组合后确认，不是只要看到一个可疑库名就按这一类拦截。"),
+        Paragraph("原理：宿主目录说明云派工“住在别人家”，引擎库说明容器代码已加载进本进程。通过应用路径和 /proc/self/maps 取证，两项组合确认，不凭一个库名拦截。"),
         Heading("第三类：宿主虚拟路径＋VBox 引擎库（g+vb）"),
         Paragraph("同时发现：当前云派工位于其他应用的虚拟目录；本进程加载了完整库名 libvb.so。库名必须精确匹配，libvb.so.bak 等相似名称不算。"),
-        Paragraph("原理与第二类相同，区别在于容器引擎特征。单独出现 libvb.so 可以作为原有观测上报的命中特征，但不满足这一类拍照拦截条件，仍需宿主虚拟路径佐证。"),
+        Paragraph("原理与第二类相同，只是换了一类引擎。单独发现 libvb.so 可按原有规则观测上报，但这条拍照拦截规则必须同时有宿主虚拟路径。"),
         Heading("第四类：疑似虚拟路径＋已确认宿主黑名单（g+bl）"),
-        Paragraph("只补充原规则判为 suspected 的情况：已有当前云派工的宿主虚拟路径证据，且从路径提取的完整宿主包名，精确命中已确认工具黑名单。既不是检查手机安装了什么，也不是对整条日志做字符串包含匹配。"),
+        Paragraph("仅补充原本 suspected 的结果：已有云派工的宿主虚拟路径，提取出的完整宿主包名又精确命中已确认工具黑名单。不查安装列表，不做字符串包含匹配。"),
         Code(
             """
             原始证据：
@@ -57,11 +52,11 @@ object PhotoCheatingDetectionPage : BookPage.Article() {
             M-g+bl-com.paint.yssh-f0-vivo_V1936AL_A30
             """.trimIndent(),
         ),
-        Paragraph("原理：有些容器隐藏了引擎库，或适配了身份接口，但虚拟路径仍暴露宿主。结合已有确认记录中的工具包名，可以补足证据，不必重新增加线程扫描。名单可持续维护，com.paint.yssh.extra 不会因为包含 com.paint.yssh 而命中。"),
-        Paragraph("补充命中后不再上传“不确定”事件，改走现有确认事件：账号与工具记录、工具统计、技术诊断；拍照时同样参与拦截并使用现有拍照事件。仅技术证据码增加 bl，避免新增高基数字段或重复上报疑似、确认两套结果。"),
+        Paragraph("原理：引擎库可能被隐藏，但路径仍暴露宿主。结合已确认工具的包名补足证据，不增加线程扫描。名单可持续维护；com.paint.yssh.extra 不会因包含 com.paint.yssh 而命中。"),
+        Paragraph("命中后不再上报“不确定”，改走现有确认事件；拍照时同样参与拦截和拍照事件上报。技术记录增加 bl，业务格式不变。"),
         Heading("时机、性能与判定边界"),
-        Paragraph("启动进入首页后的检测用于观测，只上报、不拦截。拍照返回后重新检测，不直接复用启动时的疑似结果；必须在照片数据入库和提交后端之前决定是否放行。确认需要拦截后，照片不进入后续保存流程，并显示拦截弹窗。"),
-        Paragraph("启动检查包含类特征、线程等诊断项；拍照检查只保留身份、路径和已加载库，不扫描诊断类和线程。探测在 IO 线程执行；第四类只增加内存中的集合精确匹配，不增加文件读取或网络请求。"),
-        Paragraph("单纯读取失败不等于作弊，也不等于环境安全。有独立、有效证据时，其他步骤失败不会抹掉已有证据。普通安装、工作资料和系统多用户目录，不会仅因 userId 不是 0 而命中虚拟路径。客户端检测可能被绕过，测试通过也不等于已经证明所有机型零误判。"),
+        Paragraph("启动进入首页后只检测上报；拍照返回后重新检查，在照片入库、提交前决定放行或拦截，不直接复用启动时的疑似结果。"),
+        Paragraph("启动做完整诊断；拍照只查身份、路径、已加载库，不扫描类和线程。探测在 IO 线程执行，第四类只额外做内存匹配。"),
+        Paragraph("读取失败不等于作弊，也不等于安全；已有有效证据不会因其他步骤失败而消失。普通安装、工作资料、系统多用户目录，不会仅因 userId 非 0 而命中。客户端检测仍可能被绕过，不能承诺全机型零误判。"),
     )
 }
