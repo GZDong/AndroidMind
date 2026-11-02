@@ -5,33 +5,31 @@ import com.gzd.androidmind.content.BookPage.Directory
 import com.gzd.androidmind.content.ContentBlock.Link
 import com.gzd.androidmind.content.ContentBlock.LinkButton
 import com.gzd.androidmind.content.ContentBlock.Paragraph
+import com.gzd.androidmind.content.framework.FrameworkDirectory
+import com.gzd.androidmind.content.workskill.WorkSkillDirectory
 
 /**
- * All reading content lives here. IDs are stable link targets; titles can change freely.
- * Directories can contain both articles and further directories, without a depth limit.
- *
  * @Author GZDong(A80788)
  * @Date 2026/11/2
  */
 object BookContent {
-    val framework = Directory(
-        id = "framework",
-        title = "Framework",
-        children = emptyList(),
-    )
+    val framework = FrameworkDirectory
+    val workSkill = WorkSkillDirectory
 
-    val workSkill = Directory(
-        id = "work-skill",
-        title = "WorkSkill",
-        children = emptyList(),
-    )
+    val roots: List<Directory> = listOf(framework, workSkill)
 
-    val roots = listOf(framework, workSkill)
-
-    val pagesById: Map<String, BookPage> = buildMap {
+    val pagesById: Map<String, BookPage> = buildMap<String, BookPage> {
         fun register(page: BookPage) {
-            require(put(page.id, page) == null) { "Duplicate page ID: ${page.id}" }
-            if (page is Directory) page.children.forEach(::register)
+            val existing = get(page.id)
+            if (existing != null) {
+                require(existing === page) { "Duplicate page ID: ${page.id}" }
+                return
+            }
+            put(page.id, page)
+            when (page) {
+                is Directory -> page.children.forEach(::register)
+                is Article -> page.relatedPages.forEach(::register)
+            }
         }
         roots.forEach(::register)
     }.also { pages ->

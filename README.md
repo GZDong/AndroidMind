@@ -1,46 +1,71 @@
 # AndroidMind
 
-用 Kotlin、Jetpack Compose 和 Material 3 构建的个人学习手册。内容直接维护在代码里，无数据库、账号或在线编辑功能。支持浅色与深色外观。
+用 Kotlin、Jetpack Compose 和 Material 3 构建的个人学习手册。内容直接维护在代码里，无数据库、账号或在线编辑功能，支持浅色与深色外观。
 
-## 目录结构
+## 内容结构
 
-- `content/BookPage.kt`：目录、文章与正文块模型。
-- `content/BookContent.kt`：Framework、WorkSkill 的内容入口及页面索引。
-- `ui/AndroidMindApp.kt`：目录、阅读页面、标签切换与阅读历史。
-- `ui/AndroidMindTheme.kt`：应用配色。
+内容采用组合模式：目录和文章统一继承 `BookPage`，目录可以包含文章或其他目录。每个目录、每篇文章都有自己的类和文件，按主题放进独立包中。
 
-上述 Kotlin 文件位于 `app/src/main/java/com/gzd/androidmind/`。
+以下目录位于 `app/src/main/java/com/gzd/androidmind/`：
+
+```text
+content/
+├── BookPage.kt                      # 公共目录、文章父类
+├── ContentBlock.kt                  # 公共正文块：段落、代码、链接等
+├── BookContent.kt                   # 两个首页入口、页面索引与链接校验
+├── framework/
+│   └── FrameworkDirectory.kt
+└── workskill/
+    ├── WorkSkillDirectory.kt
+    └── photocheating/
+        ├── PhotoCheatingOverviewPage.kt
+        └── PhotoCheatingDetectionPage.kt
+ui/
+├── AndroidMindApp.kt                # 公共页面渲染与导航
+└── AndroidMindTheme.kt              # 配色及 4dp 圆角
+```
+
+`BookContent` 不编写正文，也不逐篇注册文章。它从两个根目录自动遍历下级目录、文章及文章关联页，建立索引，检查重复 ID 和无效链接。正文、主题目录都在各自文件维护。
 
 ## 增加内容
 
-在 `BookContent` 对应的 `children` 中添加条目即可。现有内容为演示章节，可直接替换。
+例如要增加 `fw → Binder → 调用过程`：
+
+1. 在 `content/framework/binder/` 新建 `BinderDirectory.kt`，继承 `BookPage.Directory`。
+2. 在同一包中新建 `BinderCallPage.kt`，继承 `BookPage.Article`。
+3. 在 `BinderDirectory.children` 中引用 `BinderCallPage`。
+4. 在 `FrameworkDirectory.children` 中引用 `BinderDirectory`。已有的目录直接复用。
+
+文章类示例（新文件须在声明上方添加个人规则要求的作者、日期注释）：
 
 ```kotlin
-Directory(
-    id = "threading",
-    title = "线程与消息机制",
-    children = listOf(
-        Article(
-            id = "handler",
-            title = "Handler 机制",
-            blocks = listOf(
-                Heading("问题背景"),
-                Paragraph("在这里编写正文。"),
-                Code("val message = Message.obtain()"),
-                Paragraph(
-                    "延伸阅读：Binder 学习路线。",
-                    links = mapOf("Binder 学习路线" to "binder-roadmap"),
-                ),
-                Link("查看完整路线", "binder-roadmap"),
-                LinkButton("继续阅读", "binder-roadmap"),
-            ),
-        ),
-    ),
-)
+object BinderCallPage : BookPage.Article() {
+    const val ID = "framework-binder-call"
+    override val id = ID
+    override val title = "调用过程"
+    override val blocks: List<ContentBlock> = listOf(
+        ContentBlock.Heading("问题背景"),
+        ContentBlock.Paragraph("在这里编写正文。"),
+        ContentBlock.Code("val message = Message.obtain()"),
+    )
+}
 ```
 
-`Directory.children` 可同时放文章与子目录，不设固定层级。页面 `id` 必须全局唯一，跳转使用目标页面的 `id`，因此修改标题不会破坏链接。应用初始化时会检查重复 ID、无效跳转与不存在的正文链接文字。
+子目录同样继承 `BookPage.Directory`，覆写 `id`、`title`、`children`。不设固定层级，目录文件只组合子页面，不内嵌整篇正文。
 
-每个底部标签保存独立的阅读历史；返回会回到跳转前的页面与滚动位置。正文支持可复制的段落、标题、横向滚动代码块、行内划线链接、独立链接与按钮。
+页面 ID 必须全局唯一并保持稳定，修改标题不影响跳转。`Paragraph.links` 支持行内划线链接，`Link` 和 `LinkButton` 支持独立链接及按钮；目标填写文章的 `ID` 常量。目标页通过目录的 `children` 或文章的 `relatedPages` 声明，无需到 `BookContent` 手动注册。同一个页面对象可以被多处引用，不同页面不能共用 ID。
 
-列表条目左右各留 12dp，相邻条目之间的垂直间距为 12dp。图标为书页与阶梯，使用 Android 矢量资源，便于后续调整。
+## 两种内容组织方式
+
+- 目录模式：目录的 `children` 引用多篇文章或子目录，点击条目先看到列表。
+- 正文跳转模式：父目录直接引用正文页，正文页用 `relatedPages` 声明独立说明页，再通过正文中的链接或按钮跳转。关联页只进入索引，不作为额外列表项显示。
+
+“图片多开环境作弊”使用正文跳转模式：`WorkSkillDirectory` 直接引用 `PhotoCheatingOverviewPage`，点击后进入原正文；该正文的 `relatedPages` 引用 `PhotoCheatingDetectionPage`，由原有按钮打开。检测内容仍单独维护，不合并到正文。
+
+拆分代码文件不应改变已有阅读结构。是否增加目录层级，应由用户指定，而不是因文章拆成多个文件就增加目录。
+
+## 阅读行为
+
+底部导航只在首页显示，进入子目录或文章后隐藏。返回会恢复上一页及滚动位置，正文支持选择复制、横向滚动代码块和跨页面跳转。
+
+列表左右各留 12dp，相邻条目的垂直间距为 12dp。应用图标为书页与阶梯，使用 Android 矢量资源。
